@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 #
 # Copyright 2017, International Business Machines Corporation
 #
@@ -27,7 +27,7 @@ import re
 import pycurl
 import xml.etree.cElementTree as ET
 import socket
-import cStringIO # pylint: disable=bad-python3-import
+import io
 import shutil
 
 # TODO: Use Standard logger instead of log routine
@@ -177,6 +177,7 @@ def exec_cmd(cmd):
     try:
         myfile = open(stderr_file, 'w')
         output = subprocess.check_output(cmd, stderr=myfile)
+        output = output.decode('UTF-8')
         myfile.close()
         s = re.search(r'rc=([-\d]+)$', output)
         if s:
@@ -396,11 +397,11 @@ def build_managed_system(hmc_info, vios_info, managed_system_info, xml_file):
         sys.exit(3)
 
     log("Get managed system serial numbers\n")
-    iter_ = tree.getiterator()
+    iter_ = tree.iter()
     for elem in iter_:
         # Retrieving the current Managed System
         if re.sub(r'{[^>]*}', "", elem.tag) == "entry":
-            elem_child = elem.getchildren()
+            elem_child = list(elem)
             for child in elem_child:
                 if re.sub(r'{[^>]*}', "", child.tag) != "id":
                     continue
@@ -415,7 +416,7 @@ def build_managed_system(hmc_info, vios_info, managed_system_info, xml_file):
         if re.sub(r'{[^>]*}', "", elem.tag) == "MachineTypeModelAndSerialNumber":
             # string to append to the managed system dict
             serial_string = ""
-            elem_child = elem.getchildren()
+            elem_child = list(elem)
             for serial_child in elem_child:
                 if re.sub(r'{[^>]*}', "", serial_child.tag) == "MachineType":
                     serial_string += serial_child.text + "-"
@@ -428,7 +429,7 @@ def build_managed_system(hmc_info, vios_info, managed_system_info, xml_file):
 
         if re.sub(r'{[^>]*}', "", elem.tag) == "AssociatedVirtualIOServers":
             write("Retrieving the VIOS UUIDs", lvl=2)
-            elem_child = elem.getchildren()
+            elem_child = list(elem)
 
             # The VIOS UUIDs are in the "link" attribute
             for child in elem_child:
@@ -570,7 +571,7 @@ def grep(filename, tag):
         log("WARNING: Failed to parse '{0}' to find '{1}' tag.\n".format(filename, tag))
         return ""
 
-    iter_ = tree.getiterator()
+    iter_ = tree.iter()
     for elem in iter_:
         if re.sub(r'{[^>]*}', "", elem.tag) == tag:
             return elem.text
@@ -595,7 +596,7 @@ def grep_array(filename, tag):
     except ET.ParseError as e:
         log("WARNING: Failed to parse '{0}' to find '{1}' tag.\n".format(filename, tag))
         return arr
-    iter_ = tree.getiterator()
+    iter_ = tree.iter()
     for elem in iter_:
         if re.sub(r'{[^>]*}', "", elem.tag) == tag:
             arr.append(elem.text)
@@ -622,7 +623,7 @@ def grep_check(filename, tag):
     except ET.ParseError as e:
         log("WARNING: Failed to parse '{0}' to find '{1}' tag.\n".format(filename, tag))
         return found
-    iter_ = tree.getiterator()
+    iter_ = tree.iter()
     for elem in iter_:
         if re.sub(r'{[^>]*}', "", elem.tag) == tag:
             found = True
@@ -649,10 +650,10 @@ def awk(filename, tag1, tag2):
         log("WARNING: Failed to parse '{0}' to find '{1}' and '{2}' tags.\n"
             .format(filename, tag1, tag2))
         return arr
-    iter_ = tree.getiterator()
+    iter_ = tree.iter()
     for elem in iter_:
         if re.sub(r'{[^>]*}', "", elem.tag) == tag1:
-            elem_child = elem.getchildren()
+            elem_child = list(elem)
             for child in elem_child:
                 if re.sub(r'{[^>]*}', "", child.tag) == tag2:
                     arr.append(child.text)
@@ -928,13 +929,13 @@ def get_vscsi_mapping(vios_name, vios_uuid):
     except ET.ParseError as e:
         write("ERROR: Failed to parse {0}: {1}".format(filename, e), lvl=0)
         sys.exit(2)
-    iter_ = tree.getiterator()
+    iter_ = tree.iter()
     device_target_mapping = {}
     for elem in iter_:
         if re.sub(r'{[^>]*}', "", elem.tag) == 'ServerAdapter':
             backing_device_name = ""
             remote_logical_partition_id = ""
-            elem_child = elem.getchildren()
+            elem_child = list(elem)
             for child in elem_child:
                 if re.sub(r'{[^>]*}', "", child.tag) == 'BackingDeviceName':
                     backing_device_name = re.sub(r'<[^>]*>', "", child.text)
@@ -954,7 +955,7 @@ def get_vscsi_mapping(vios_name, vios_uuid):
         UDID = ""
         reserve_policy = ""
         if re.sub(r'{[^>]*}', "", elem.tag) == 'Storage':
-            elem_child = elem.getchildren()
+            elem_child = list(elem)
             for child in elem_child:
                 str_tag = re.sub(r'{[^>]*}', "", child.tag)
 
@@ -1070,7 +1071,7 @@ def build_fc_mapping(vios_name, vios_uuid, fc_mapping):
     except ET.ParseError as e:
         write("ERROR: Failed to parse {0}: {1}".format(filename, e), lvl=0)
         sys.exit(2)
-    iter_ = tree.getiterator()
+    iter_ = tree.iter()
 
     for elem in iter_:
         if re.sub(r'{[^>]*}', "", elem.tag) == 'ServerAdapter':
@@ -1078,7 +1079,7 @@ def build_fc_mapping(vios_name, vios_uuid, fc_mapping):
             VirtualSlotNumber = ''
             ConnectingPartitionID = ''
             ConnectingVirtualSlotNumber = ''
-            elem_child = elem.getchildren()
+            elem_child = list(elem)
             for child in elem_child:
                 if re.sub(r'{[^>]*}', '', child.tag) == 'LocalPartitionID':
                     LocalPartitionID = re.sub(r'<[^>]*>', "", child.text)
@@ -1145,7 +1146,7 @@ def build_sea_config(vios_name, vios_uuid, sea_config):
     except ET.ParseError as e:
         write("ERROR: Failed to parse {0}: {1}".format(filename, e), lvl=0)
         sys.exit(2)
-    iter_ = tree.getiterator()
+    iter_ = tree.iter()
 
     for elem in iter_:
         if re.sub(r'{[^>]*}', "", elem.tag) == 'SharedEthernetAdapter':
@@ -1156,7 +1157,7 @@ def build_sea_config(vios_name, vios_uuid, sea_config):
             BackingDeviceState = "none"
             SEADeviceName = "none"
             Priority = ""
-            elem_child = elem.getchildren()
+            elem_child = list(elem)
             for child in elem_child:
                 if re.sub(r'{[^>]*}', "", child.tag) == 'BackingDeviceChoice':
                     sub_child = child.getchildren()
@@ -1226,7 +1227,7 @@ def curl_request(sess_key, url, filename):
         sys.exit(3)
 
     hdrs = ['X-API-Session:{0}'.format(sess_key)]
-    hdr = cStringIO.StringIO()
+    hdr = io.BytesIO()
 
     try:
         c = pycurl.Curl()
@@ -1256,7 +1257,8 @@ def curl_request(sess_key, url, filename):
     #     .format(filename, f.read(), filename))
 
     # Get the http code and message to precise the error
-    status_line = hdr.getvalue().splitlines()[0]
+    status_line1 = hdr.getvalue().decode('UTF-8')
+    status_line = status_line1.splitlines()[0]
     m = re.match(r'HTTP\/\S*\s*(\d+)\s*(.*)\s*$', status_line)
     if m:
         http_code = str(m.group(1))
@@ -1586,7 +1588,14 @@ if action == "list":
 #  the ones of interest
 ###############################################################################
 write("Find VIOS(es) Name from specified UUID(s)", lvl=2)
-for name in vios_info.keys():
+# Have a copy of the vios_info keys and loop through it, 
+# in order to avoid confusion in parsing through the keys
+# as the same vios_info is updated in this loop. 
+# This change is also done in order to handle the 
+# error reported by python3 for the same condition.
+
+viosinfo_keyscopy = tuple(vios_info.keys())
+for name in viosinfo_keyscopy:
     if vios_info[name]['uuid'] == vios1_uuid:
         vios1_name = name
         vios_info[name]['role'] = 'primary'
