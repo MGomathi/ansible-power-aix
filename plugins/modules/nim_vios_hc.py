@@ -185,7 +185,7 @@ def get_nim_clients_info(module, lpar_type):
     """
     info_hash = {}
 
-    cmd = ['lsnim', '-t', lpar_type, '-l']
+    cmd = ['/usr/sbin/lsnim', '-t', lpar_type, '-l']
     ret, stdout, stderr = module.run_command(cmd)
     if ret != 0:
         msg = 'Failed to get NIM clients info, lsnim returned: {0}'.format(stderr)
@@ -244,10 +244,10 @@ def build_nim_node(module):
     nim_vios = get_nim_clients_info(module, 'vios')
 
     # Complete the CEC serial in nim_vios dict
-    for key in nim_vios:
-        mgmt_cec = nim_vios[key]['mgmt_cec']
+    for key, nimvios in nim_vios.items():
+        mgmt_cec = nimvios['mgmt_cec']
         if mgmt_cec in nim_cec:
-            nim_vios[key]['mgmt_cec_serial'] = nim_cec[mgmt_cec]['serial']
+            nimvios['mgmt_cec_serial'] = nim_cec[mgmt_cec]['serial']
 
     NIM_NODE['nim_vios'] = nim_vios
     module.debug('NIM VIOS: {0}'.format(nim_vios))
@@ -599,22 +599,23 @@ def health_check(module, targets):
 def get_vioshc_interpreter(module):
     """
     Provide the right python interpreter to be used for vioshc command.
-    
     return: Right python interpreter if ok,
             Null string otherwise
     """
-    #Check whether the python interpreter is in the list.
-    #if that path exists on the system , then continue with that
-    #else proceed to the next interpreter in the list.
+    """
+    Check whether the python interpreter is in the list.
+    if that path exists on the system , then continue with that
+    else proceed to the next interpreter in the list.
+    """
     is_interpreter_found = False
-    is_pycurl_found= False
-    python_interpreter_list  = ['/usr/bin/python', '/opt/freeware/bin/python3', '/usr/bin/python3']
-    
+    is_pycurl_found = False
+    python_interpreter_list = ['/usr/bin/python', '/opt/freeware/bin/python3', '/usr/bin/python3']
+
     for interpreter in python_interpreter_list:
-        #Reinitialize these values for every loop
+        # Reinitialize these values for every loop
         is_interpreter_found = False
-        is_pycurl_found= False
-        #check if that path exists. Add check for pycurl module.
+        is_pycurl_found = False
+        # check if that path exists. Add check for pycurl module.
         if os.path.isfile(interpreter):
             is_interpreter_found = True
             cmd = interpreter + '  -c "import pycurl"'
@@ -623,13 +624,14 @@ def get_vioshc_interpreter(module):
                 return interpreter
             else:
                 is_pycurl_found = False
-        
-        
-    #If we have exhausted the list, that means no interpreter or no pycurl module
-    # in the list was found. So give a error message.The interpreter will be found
-    #always because without the ansible module will not run anyway.
-    if  is_interpreter_found == True:
-        if is_pycurl_found == False:
+
+    """
+    If we have exhausted the list, that means no interpreter or no pycurl module
+    in the list was found. So give a error message.The interpreter will be found
+    always because without the ansible module will not run anyway.
+    """
+    if is_interpreter_found is True:
+        if is_pycurl_found is False:
             msg = 'Unable to find the right python interpreter with the dependent module pycurl.'
             OUTPUT.append('    Warning: Dependent module pycurl is not found  ')
             results['stdout'] = stdout
@@ -639,9 +641,7 @@ def get_vioshc_interpreter(module):
         OUTPUT.append('    Warning: No python interpreter found. ')
 
     results['msg'] = msg
-    return None;
-	
-	
+    return None
 
 
 def main():
@@ -684,14 +684,14 @@ def main():
         target_list = ret
         OUTPUT.append('    Targets list: {0}'.format(target_list))
         module.debug('Targets list: {0}'.format(target_list))
-
-        # Get the interpreter for vioshc command.  If unable to find a
-        # proper interpreter, then fail.
+        """
+        Get the interpreter for vioshc command.  If unable to find a
+        proper interpreter, then fail.
+        """
         vioshc_interpreter = get_vioshc_interpreter(module)
         if(vioshc_interpreter is None):
             module.fail_json(**results)
-                   
-        
+
         # Get the vioshc command path
         vioshc_cmd = module.get_bin_path('vioshc.py', required=True)
         module.debug('Using vioshc.py script at {0}:{1}'.format(vioshc_interpreter, vioshc_cmd))
@@ -700,9 +700,9 @@ def main():
 
         OUTPUT.append('VIOS Health Check status:')
         module.log('VIOS Health Check status:')
-        for vios_key in targets_health_status.keys():
-            OUTPUT.append("    {0} : {1}".format(vios_key, targets_health_status[vios_key]))
-            module.log('    {0} : {1}'.format(vios_key, targets_health_status[vios_key]))
+        for vios_key, vios_health_status in targets_health_status.items():
+            OUTPUT.append("    {0} : {1}".format(vios_key, vios_health_status))
+            module.log('    {0} : {1}'.format(vios_key, vios_health_status))
 
     results['targets'] = target_list
     results['nim_node'] = NIM_NODE

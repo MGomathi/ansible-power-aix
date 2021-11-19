@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 #
 # Copyright 2017, International Business Machines Corporation
 #
@@ -15,8 +15,8 @@
 # limitations under the License.
 
 ###############################################################################
-
-from  __future__ import absolute_import, division
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
 from datetime import datetime
 import os
 import sys
@@ -83,7 +83,8 @@ def touch(path):
     """
     log("creating file: {0}\n".format(path))
     try:
-        open(path, 'a')
+        with open(path, 'a', encoding='utf-8') as file_handle:
+            log("file open successful.\n")
     except IOError as e:
         write('ERROR: Failed to create file {0}: {1}.'
               .format(path, e.strerror), lvl=0)
@@ -144,20 +145,19 @@ def format_xml_file(filename):
     Output: none
     """
     try:
-        f = open(filename, 'r+')
+        with open(filename, 'r+', encoding="utf-8") as f:
+            lines = f.readlines()
+            f.seek(0)
+            start_writing = False
+            for i in lines:
+                if i[0] == '<':
+                    start_writing = True
+                if start_writing:
+                    f.write(i)
+            f.truncate()
     except IOError as e:
         write('ERROR: Failed to create file {0}: {1}.'.format(filename, e.strerror), lvl=0)
         sys.exit(3)
-    lines = f.readlines()
-    f.seek(0)
-    start_writing = False
-    for i in lines:
-        if i[0] == '<':
-            start_writing = True
-        if start_writing:
-            f.write(i)
-    f.truncate()
-    f.close()
 
 
 def exec_cmd(cmd):
@@ -175,14 +175,13 @@ def exec_cmd(cmd):
     th_id = threading.current_thread().ident
     stderr_file = os.path.join(log_dir, 'cmd_stderr_{0}'.format(th_id))
     try:
-        myfile = open(stderr_file, 'w')
-        output = subprocess.check_output(cmd, stderr=myfile)
-        output = output.decode('UTF-8')
-        myfile.close()
-        s = re.search(r'rc=([-\d]+)$', output)
-        if s:
-            rc = int(s.group(1))
-            output = re.sub(r'rc=[-\d]+\n$', '', output)  # remove the rc of c_rsh with echo $?
+        with open(stderr_file, 'w', encoding='utf-8') as myfile:
+            output = subprocess.check_output(cmd, stderr=myfile)
+            output = output.decode('UTF-8')
+            s = re.search(r'rc=([-\d]+)$', output)
+            if s:
+                rc = int(s.group(1))
+                output = re.sub(r'rc=[-\d]+\n$', '', output)  # remove the rc of c_rsh with echo $?
 
     except subprocess.CalledProcessError as exc:
         myfile.close()
@@ -210,9 +209,8 @@ def exec_cmd(cmd):
 
     # check for error message
     if os.path.getsize(stderr_file) > 0:
-        myfile = open(stderr_file, 'r')
-        errout += ''.join(myfile)
-        myfile.close()
+        with open(stderr_file, 'r', encoding='utf-8') as myfile:
+            errout += ''.join(myfile)
     os.remove(stderr_file)
 
     log('command {0} returned:\n'.format(cmd))
@@ -284,7 +282,7 @@ def get_nim_name(hostname):
     """
     name = ""
 
-    cmd = ['/usr/sbin/lsnim', '-a', 'if1']
+    cmd = ["lsnim", "-a", "if1"]
     (rc, output, errout) = exec_cmd(cmd)
     if rc != 0:
         write('ERROR: Failed to get NIM name for {0}: {1} {2}'
@@ -363,12 +361,12 @@ def get_usr_passwd(decrypt_file):
     Output:(str) password
     """
     try:
-        f = open(decrypt_file, 'r')
+        with open(decrypt_file, 'r', encoding='utf-8') as f:
+            arr = f.read().split(' ')
     except IOError as e:
         write("ERROR: Failed to open file {0}: {1}.".format(decrypt_file, e.strerror), lvl=0)
         sys.exit(3)
-    arr = f.read().split(' ')
-    f.close()
+
     return arr
 
 
@@ -477,50 +475,47 @@ def get_session_key(hmc_info, filename):
     """
     s_key = ""
     try:
-        f = open(filename, 'wb')
+        with open(filename, 'wb') as f:
+            url = "https://{0}:12443/rest/api/web/Logon".format(hmc_info['hostname'])
+            fields = '<LogonRequest schemaVersion=\"V1_0\" '\
+                     'xmlns=\"http://www.ibm.com/xmlns/systems/power/firmware/web/mc/2012_10/\"  '\
+                     'xmlns:mc=\"http://www.ibm.com/xmlns/systems/power/firmware/web/mc/2012_10/\"> '\
+                     '<UserID>{0}</UserID>'\
+                     .format(hmc_info['user_id'])
+
+            log("curl request on: {0}\n".format(url))
+            log("curl request fields: {0} <Password>xxx</Password></LogonRequest>\n".format(fields))
+            fields += ' <Password>{0}</Password></LogonRequest>'\
+                      .format(hmc_info['user_password'])
+            hdrs = ['Content-Type: application/vnd.ibm.powervm.web+xml; type=LogonRequest']
+
+            try:
+                c = pycurl.Curl()
+                c.setopt(c.HTTPHEADER, hdrs)
+                c.setopt(c.CUSTOMREQUEST, "PUT")
+                c.setopt(c.POST, 1)
+                c.setopt(c.POSTFIELDS, fields)
+                c.setopt(c.URL, url)
+                c.setopt(c.SSL_VERIFYPEER, False)
+                c.setopt(c.WRITEDATA, f)
+                c.perform()
+            except pycurl.error as e:
+                write("ERROR: Curl request failed: {0}".format(e), lvl=0)
+                return ""
     except IOError as e:
         write("ERROR: Failed to create file {0}: {1}.".format(filename, e.strerror), lvl=0)
         sys.exit(3)
-
-    url = "https://{0}:12443/rest/api/web/Logon".format(hmc_info['hostname'])
-    fields = '<LogonRequest schemaVersion=\"V1_0\" '\
-             'xmlns=\"http://www.ibm.com/xmlns/systems/power/firmware/web/mc/2012_10/\"  '\
-             'xmlns:mc=\"http://www.ibm.com/xmlns/systems/power/firmware/web/mc/2012_10/\"> '\
-             '<UserID>{0}</UserID>'\
-             .format(hmc_info['user_id'])
-
-    log("curl request on: {0}\n".format(url))
-    log("curl request fields: {0} <Password>xxx</Password></LogonRequest>\n".format(fields))
-    fields += ' <Password>{0}</Password></LogonRequest>'\
-              .format(hmc_info['user_password'])
-    hdrs = ['Content-Type: application/vnd.ibm.powervm.web+xml; type=LogonRequest']
-
-    try:
-        c = pycurl.Curl()
-        c.setopt(c.HTTPHEADER, hdrs)
-        c.setopt(c.CUSTOMREQUEST, "PUT")
-        c.setopt(c.POST, 1)
-        c.setopt(c.POSTFIELDS, fields)
-        c.setopt(c.URL, url)
-        c.setopt(c.SSL_VERIFYPEER, False)
-        c.setopt(c.WRITEDATA, f)
-        c.perform()
-    except pycurl.error as e:
-        write("ERROR: Curl request failed: {0}".format(e), lvl=0)
-        return ""
 
     # Reopen the file in text mode
-    f.close()
     try:
-        f = open(filename, 'r')
+        with open(filename, 'r', encoding="utf-8") as f:
+            # Isolate session key
+            for line in f:
+                if re.search('<X-API-Session', line):
+                    s_key = re.sub(r'<[^>]*>', "", line)
     except IOError as e:
         write("ERROR: Failed to create file {0}: {1}.".format(filename, e.strerror), lvl=0)
         sys.exit(3)
-
-    # Isolate session key
-    for line in f:
-        if re.search('<X-API-Session', line):
-            s_key = re.sub(r'<[^>]*>', "", line)
 
     return s_key.strip()
 
@@ -831,7 +826,7 @@ def get_vios_sea_state(vios_name, sea_device):
     # file to get all SEA info (debug)
     filename = "{0}/{1}_{2}.txt".format(xml_dir, vios_name, sea_device)
     try:
-        f = open(filename, 'w+')
+        f = open(filename, 'w+', encoding="utf-8")
     except IOError as e:
         write("ERROR: Failed to create file {0}: {1}.".format(filename, e.strerror), lvl=0)
         f = None
@@ -945,8 +940,8 @@ def get_vscsi_mapping(vios_name, vios_uuid):
                 device_target_mapping[backing_device_name] = []
             device_target_mapping[backing_device_name].append(remote_logical_partition_id)
 
-    for dev in device_target_mapping:
-        device_target_mapping[dev].sort()
+    for dev, dev_target_mapping in device_target_mapping.items():
+        device_target_mapping.sort()
 
     vios_scsi_mapping = {}
     for elem in iter_:
@@ -1004,31 +999,31 @@ def get_vscsi_mapping(vios_name, vios_uuid):
         write(vscsi_header, lvl=1)
         write(divider, lvl=1)
 
-        msg_txt = open(filename_msg, 'w+')
+        msg_txt = open(filename_msg, 'w+', encoding="utf-8")
 
-        for udid in vios_scsi_mapping:
-            write(format_string % (vios_scsi_mapping[udid]["BackingDeviceName"],
-                  udid, vios_scsi_mapping[udid]["BackingDeviceType"],
-                  vios_scsi_mapping[udid]["ReservePolicy"],
-                  vios_scsi_mapping[udid]["RemoteLParIDs"]), lvl=1)
-        for udid in vios_scsi_mapping:
-            if vios_scsi_mapping[udid]["ReservePolicy"] == "SinglePath":
+        for udid, vio_scsi_mapping in vios_scsi_mapping.items():
+            write(format_string % (vio_scsi_mapping["BackingDeviceName"],
+                  udid, vio_scsi_mapping["BackingDeviceType"],
+                  vio_scsi_mapping["ReservePolicy"],
+                  vio_scsi_mapping["RemoteLParIDs"]), lvl=1)
+        for udid, vio_scsi_mapping in vios_scsi_mapping.items():
+            if vio_scsi_mapping["ReservePolicy"] == "SinglePath":
                 msg = "WARNING: You have single path for {0} on VIOS {1} which is likely an issue"\
-                      .format(vios_scsi_mapping[udid]["BackingDeviceName"], vios_name)
+                      .format(vio_scsi_mapping["BackingDeviceName"], vios_name)
                 write(msg, lvl=1)
                 msg_txt.write(msg)
-            elif vios_scsi_mapping[udid]["BackingDeviceType"] == "Other":
+            elif vio_scsi_mapping["BackingDeviceType"] == "Other":
                 msg = "WARNING: {0} is not supported by both VIOSes because it is of type {1}"\
-                      .format(vios_scsi_mapping[udid]["BackingDeviceName"],
-                              vios_scsi_mapping[udid]["BackingDeviceType"])
+                      .format(vio_scsi_mapping["BackingDeviceName"],
+                              vio_scsi_mapping["BackingDeviceType"])
                 write(msg, lvl=1)
                 msg_txt.write(msg)
-            elif vios_scsi_mapping[udid]["BackingDeviceType"] == "LogicalVolume":
+            elif vio_scsi_mapping["BackingDeviceType"] == "LogicalVolume":
                 msg = "WARNING: This backing device: {0} is not accessible via both VIOSes"\
-                      .format(vios_scsi_mapping[udid]["BackingDeviceName"])
+                      .format(vio_scsi_mapping["BackingDeviceName"])
                 write(msg, lvl=1)
                 msg_txt.write(msg)
-
+        msg_txt.close()
     return vios_scsi_mapping
 
 
@@ -1221,40 +1216,40 @@ def curl_request(sess_key, url, filename):
     """
     log("Curl request, sess_key: {0}, file: {1}, url: {2}\n".format(sess_key, filename, url))
     try:
-        f = open(filename, 'wb')
+        with open(filename, 'wb') as f:
+            hdrs = ['X-API-Session:{0}'.format(sess_key)]
+            hdr = io.BytesIO()
+
+            try:
+                c = pycurl.Curl()
+                c.setopt(c.HTTPHEADER, hdrs)
+                c.setopt(c.URL, url)
+                c.setopt(c.SSL_VERIFYPEER, False)
+                c.setopt(c.WRITEDATA, f)
+                c.setopt(pycurl.HEADERFUNCTION, hdr.write)
+                # for debug:
+                log("c.URL:'{0}' url:'{1}'\n".format(c.URL, url))
+                log(" c.HTTPHEADER='{0}' hdrs:'{1}'\n".format(c.HTTPHEADER, hdrs))
+                log(" c.SSL_VERIFYPEER='{0}'\n".format(c.SSL_VERIFYPEER))
+                log(" c.WRITEDATA='{0}' f:'{1}'\n".format(c.WRITEDATA, f))
+                log(" headerfunction='{0} {1}'\n".format(pycurl.HEADERFUNCTION, hdr.write))
+
+                c.perform()
+
+            except pycurl.error as e:
+                write("ERROR: Request to {0} failed: {1}.".format(url, e), lvl=0)
+                f.close()
+                return 1, e.strerror
     except IOError as e:
         write('ERROR: Failed to create file {0}: {1}.'.format(filename, e.strerror), lvl=0)
         sys.exit(3)
 
-    hdrs = ['X-API-Session:{0}'.format(sess_key)]
-    hdr = io.BytesIO()
-
-    try:
-        c = pycurl.Curl()
-        c.setopt(c.HTTPHEADER, hdrs)
-        c.setopt(c.URL, url)
-        c.setopt(c.SSL_VERIFYPEER, False)
-        c.setopt(c.WRITEDATA, f)
-        c.setopt(pycurl.HEADERFUNCTION, hdr.write)
-        # for debug:
-        log("c.URL:'{0}' url:'{1}'\n".format(c.URL, url))
-        log(" c.HTTPHEADER='{0}' hdrs:'{1}'\n".format(c.HTTPHEADER, hdrs))
-        log(" c.SSL_VERIFYPEER='{0}'\n".format(c.SSL_VERIFYPEER))
-        log(" c.WRITEDATA='{0}' f:'{1}'\n".format(c.WRITEDATA, f))
-        log(" headerfunction='{0} {1}'\n".format(pycurl.HEADERFUNCTION, hdr.write))
-
-        c.perform()
-
-    except pycurl.error as e:
-        write("ERROR: Request to {0} failed: {1}.".format(url, e), lvl=0)
-        f.close()
-        return 1, e.strerror
-
-    f.close()
-    # TBC - uncomment the 2 following lines for debug
-    # f = open(filename, 'r')
-    # log("\n### File %s content ###{0}### End of file {1} ###\n"
-    #     .format(filename, f.read(), filename))
+    """
+    TBC - uncomment the 2 following lines for debug
+    f = open(filename, 'r')
+    log("\n### File %s content ###{0}### End of file {1} ###\n"
+         .format(filename, f.read(), filename))
+    """
 
     # Get the http code and message to precise the error
     status_line1 = hdr.getvalue().decode('UTF-8')
@@ -1414,7 +1409,7 @@ xml_dir = "%s/xml_dir_%04d_%02d_%d_%02d%02d%02d" \
           % (log_dir, today.year, today.month, today.day, today.hour, today.minute, today.second)
 os.makedirs(xml_dir)
 try:
-    log_file = open(log_path, 'a+', 1)
+    log_file = open(log_path, 'a+', 1, encoding="utf-8")
 except IOError as e:
     print("ERROR: Failed to create log file {0}: {1}.".format(log_path, e.strerror))
     sys.exit(3)
@@ -1538,8 +1533,8 @@ hmc_info['nim_name'] = nim_name
 hmc_info['hostname'] = hostname
 hmc_info['ip'] = ip_list[0]
 
-for key in hmc_info.keys():
-    log("hmc_info[%-13s] = %s\n" % (key, hmc_info[key]))
+for key, hmcinfo in hmc_info.items():
+    log("hmc_info[%-13s] = %s\n" % (key, hmcinfo))
 
 write("Getting HMC credentials", lvl=2)
 # If either username or password are empty, try to retrieve them
@@ -1588,12 +1583,6 @@ if action == "list":
 #  the ones of interest
 ###############################################################################
 write("Find VIOS(es) Name from specified UUID(s)", lvl=2)
-# Have a copy of the vios_info keys and loop through it, 
-# in order to avoid confusion in parsing through the keys
-# as the same vios_info is updated in this loop. 
-# This change is also done in order to handle the 
-# error reported by python3 for the same condition.
-
 viosinfo_keyscopy = tuple(vios_info.keys())
 for name in viosinfo_keyscopy:
     if vios_info[name]['uuid'] == vios1_uuid:
@@ -1604,9 +1593,9 @@ for name in viosinfo_keyscopy:
         vios_info[name]['role'] = 'secondary'
     else:
         del vios_info[name]
-for name in vios_info.keys():
-    for key in vios_info[name].keys():
-        log("vios_info[{0}][{1}] = {2}\n".format(name, key, vios_info[name][key]))
+for name, viosinfo1 in vios_info.items():
+    for key, viosinfo2 in viosinfo1.items():
+        log("vios_info[{0}][{1}] = {2}\n".format(name, key, viosinfo2))
 rc = 0
 if vios1_name == "":
     write("ERROR: Failed to find VIOS1 {0} info.".format(vios1_uuid), lvl=0)
@@ -1623,24 +1612,24 @@ divider = "---------------------------------------------------------------------
           "--------------"
 format = "%-25s %-15s %-10s %-40s "
 
-for vios in vios_info.keys():
+for keys, viosinfo in vios_info.items():
     # If Resource Monitoring Control State is inactive, it will throw off our UUID/IP pairing
-    if (vios_info[vios]['control_state'] == "inactive"):
+    if (viosinfo['control_state'] == "inactive"):
         continue
 
     # If VIOS is not running, skip it otherwise it will throw off our UUID/IP pairing
-    if vios_info[vios]['partition_state'] == "not running":
+    if viosinfo['partition_state'] == "not running":
         continue
 
     # Get VIOS1 info (original VIOS)
-    if vios_info[vios]['role'] == "primary":
+    if viosinfo['role'] == "primary":
         write(primary_header, lvl=0)
     else:
         write(backup_header, lvl=0)
 
     write(divider, lvl=0)
-    write(format % (vios_info[vios]['partition_name'], vios_info[vios]['ip'],
-                    vios_info[vios]['id'], vios_info[vios]['uuid']), lvl=0)
+    write(format % (viosinfo['partition_name'], viosinfo['ip'],
+                    viosinfo['id'], viosinfo['uuid']), lvl=0)
 
 # Check both vios are in the same CEC
 if vios_info[vios1_name]['managed_system'] != managed_system_uuid:
@@ -1678,8 +1667,8 @@ returned Error Response.".format(hmc_ip, managed_system_uuid), lvl=0)
 build_lpar_info(lpar_info, filename_lpar_info)
 
 # Log VIOS information
-for id in lpar_info.keys():
-    log("lpar[{0}]: {1}\n".format(id, str(lpar_info[id])))
+for id, lparinfo in lpar_info.items():
+    log("lpar[{0}]: {1}\n".format(id, str(lparinfo)))
 
 
 ###############################################################################
@@ -1785,11 +1774,11 @@ write(fc_header, lvl=1)
 write(divider, lvl=1)
 
 i = 0  # index for looping through all partition mappings
-for server in fc_mapping:
-    for client in fc_mapping[server]:
+for server, fcmapserver in fc_mapping.items():
+    for client, fcmapclient in fcmapserver.items():
         write(format
-              % (server, fc_mapping[server][client]["VirtualSlotNumber"],
-                 fc_mapping[server][client]["ConnectingVirtualSlotNumber"], client),
+              % (server, fcmapclient["VirtualSlotNumber"],
+                 fcmapclient["ConnectingVirtualSlotNumber"], client),
               lvl=1)
 
 # Compares the both VIOS Fiber Channel mapping
