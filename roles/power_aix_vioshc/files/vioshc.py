@@ -83,7 +83,7 @@ def touch(path):
     """
     log("creating file: {0}\n".format(path))
     try:
-        with open(path, 'a', encoding='utf-8') as file_handle:
+        with open(path, 'a') as file_handle:
             log("file open successful.\n")
     except IOError as e:
         write('ERROR: Failed to create file {0}: {1}.'
@@ -145,7 +145,7 @@ def format_xml_file(filename):
     Output: none
     """
     try:
-        with open(filename, 'r+', encoding="utf-8") as f:
+        with open(filename, 'r+') as f:
             lines = f.readlines()
             f.seek(0)
             start_writing = False
@@ -175,7 +175,7 @@ def exec_cmd(cmd):
     th_id = threading.current_thread().ident
     stderr_file = os.path.join(log_dir, 'cmd_stderr_{0}'.format(th_id))
     try:
-        with open(stderr_file, 'w', encoding='utf-8') as myfile:
+        with open(stderr_file, 'w') as myfile:
             output = subprocess.check_output(cmd, stderr=myfile)
             output = output.decode('UTF-8')
             s = re.search(r'rc=([-\d]+)$', output)
@@ -209,7 +209,7 @@ def exec_cmd(cmd):
 
     # check for error message
     if os.path.getsize(stderr_file) > 0:
-        with open(stderr_file, 'r', encoding='utf-8') as myfile:
+        with open(stderr_file, 'r') as myfile:
             errout += ''.join(myfile)
     os.remove(stderr_file)
 
@@ -361,7 +361,7 @@ def get_usr_passwd(decrypt_file):
     Output:(str) password
     """
     try:
-        with open(decrypt_file, 'r', encoding='utf-8') as f:
+        with open(decrypt_file, 'r') as f:
             arr = f.read().split(' ')
     except IOError as e:
         write("ERROR: Failed to open file {0}: {1}.".format(decrypt_file, e.strerror), lvl=0)
@@ -508,7 +508,7 @@ def get_session_key(hmc_info, filename):
 
     # Reopen the file in text mode
     try:
-        with open(filename, 'r', encoding="utf-8") as f:
+        with open(filename, 'r') as f:
             # Isolate session key
             for line in f:
                 if re.search('<X-API-Session', line):
@@ -826,7 +826,7 @@ def get_vios_sea_state(vios_name, sea_device):
     # file to get all SEA info (debug)
     filename = "{0}/{1}_{2}.txt".format(xml_dir, vios_name, sea_device)
     try:
-        f = open(filename, 'w+', encoding="utf-8")
+        f = open(filename, 'w+')
     except IOError as e:
         write("ERROR: Failed to create file {0}: {1}.".format(filename, e.strerror), lvl=0)
         f = None
@@ -999,7 +999,7 @@ def get_vscsi_mapping(vios_name, vios_uuid):
         write(vscsi_header, lvl=1)
         write(divider, lvl=1)
 
-        msg_txt = open(filename_msg, 'w+', encoding="utf-8")
+        msg_txt = open(filename_msg, 'w+')
 
         for udid, vio_scsi_mapping in vios_scsi_mapping.items():
             write(format_string % (vio_scsi_mapping["BackingDeviceName"],
@@ -1409,7 +1409,7 @@ xml_dir = "%s/xml_dir_%04d_%02d_%d_%02d%02d%02d" \
           % (log_dir, today.year, today.month, today.day, today.hour, today.minute, today.second)
 os.makedirs(xml_dir)
 try:
-    log_file = open(log_path, 'a+', 1, encoding="utf-8")
+    log_file = open(log_path, 'a+', 1)
 except IOError as e:
     print("ERROR: Failed to create log file {0}: {1}.".format(log_path, e.strerror))
     sys.exit(3)
