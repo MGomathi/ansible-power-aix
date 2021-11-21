@@ -97,7 +97,7 @@ def get_hmc_info(module):
     """
     info_hash = {}
 
-    cmd = ['lsnim', '-t', 'hmc', '-l']
+    cmd = ['/usr/sbin/lsnim', '-t', 'hmc', '-l']
     ret, stdout, stderr = module.run_command(cmd)
     if ret != 0:
         msg = 'Failed to get HMC NIM info, lsnim returned {0}: {1}'.format(ret, stderr)
@@ -149,7 +149,7 @@ def get_nim_cecs_info(module):
     """
     info_hash = {}
 
-    cmd = ['lsnim', '-t', 'cec', '-l']
+    cmd = ['/usr/sbin/lsnim', '-t', 'cec', '-l']
     ret, stdout, stderr = module.run_command(cmd)
     if ret != 0:
         msg = 'Failed to get CEC NIM info, lsnim returned {0}: {1}'.format(ret, stderr)

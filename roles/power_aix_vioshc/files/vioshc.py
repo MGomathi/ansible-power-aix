@@ -282,7 +282,7 @@ def get_nim_name(hostname):
     """
     name = ""
 
-    cmd = ["lsnim", "-a", "if1"]
+    cmd = ["/usr/sbin/lsnim", "-a", "if1"]
     (rc, output, errout) = exec_cmd(cmd)
     if rc != 0:
         write('ERROR: Failed to get NIM name for {0}: {1} {2}'
@@ -295,11 +295,10 @@ def get_nim_name(hostname):
             name = match.group(1)
             continue
         match = re.match(r'^\s*if1\s*=\s*\S+\s+(\S+).*$', line)
-        if match and match.group(1) != hostname:
-            name = ""
-            continue
-        else:
+        if match and match.group(1) == hostname:
             break
+        name = ""
+
     if name == "":
         write('ERROR: Failed to get NIM name for {0}: Not Found'
               .format(hostname), lvl=0)
@@ -1969,17 +1968,14 @@ if vios_num > 1:
                 write('PASS: SEA(s) deserving VLAN(s) {0} are configured for failover.'
                       .format(vlan_id), lvl=0)
                 num_hc_pass += 1
-                continue
             elif (vios1_state == "LIMBO") and (vios2_state == "LIMBO"):
                 write('PASS: SEA(s) deserving VLAN(s) {0} are configured on both VIOSes but '
                       'not in usable state'.format(vlan_id), lvl=0)
                 num_hc_pass += 1
-                continue
             else:
                 write('FAIL: SEA(s) deserving VLAN(s) {0} are not in the correct state for '
                       'HA operation.'.format(vlan_id), lvl=0)
                 num_hc_fail += 1
-                continue
         elif vios1_state == "LIMBO":
             write('PASS: SEA(s) deserving VLAN(s) {0} are not configured on both VIOSes but '
                   'not in usable state.'.format(vlan_id), lvl=0)
@@ -2001,16 +1997,13 @@ if vios_num > 1:
                 write('PASS: SEA(s) deserving VLAN(s) {0} are not configured on both VIOSes '
                       'but not in usable state.'.format(vlan_id), lvl=0)
                 num_hc_fail += 1
-                continue
             elif vios2_state == "":
                 write('PASS: SEA(s) deserving VLAN(s) {0} are not configured on both VIOSes but '
                       'not in usable state.'.format(vlan_id), lvl=0)
-                continue
             else:
                 write('FAIL: SEA(s) deserving VLAN(s) {0} are not configured on both VIOSes.'
                       .format(vlan_id), lvl=0)
                 num_hc_fail += 1
-                continue
 if len(sea_config[vios1_name].keys()) == 0 \
    and (vios_num == 1 or (vios_num > 1 and len(sea_config[vios2_name].keys()) == 0)):
     write('\nNo SEA Configuration Detected.', lvl=0)
